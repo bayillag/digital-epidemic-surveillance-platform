@@ -1,0 +1,37 @@
+# ==============================================================================
+# Python package requirements for the
+# Digital Epidemic Surveillance Platform
+# ==============================================================================
+# Install these packages using: pip install -r requirements.txt
+# It is highly recommended to use a virtual environment.
+# ==============================================================================
+
+# Core Data Handling and Analysis
+pandas
+geopandas
+matplotlib
+shapely # A core dependency for geopandas
+
+# Database and Backend
+supabase
+python-dotenv
+
+# Geospatial and Mapping
+folium
+earthengine-api
+geemap
+
+# Spatial Statistics (PySAL Family)
+esda
+libpysal
+splot
+
+# Interactive Dashboards
+ipywidgets
+tqdm # For progress bars
+
+# Report Generation
+python-docx # For .docx files
+selenium # For capturing map images
+webdriver-manager # For managing selenium drivers
+weasyprint # For generating .pdf files from HTML

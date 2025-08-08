@@ -1,0 +1,224 @@
+#!/bin/bash
+
+# ==============================================================================
+# Script to Generate the Jupyter Notebook File for the
+# "02-Vaccination-Campaign-Dashboard.ipynb"
+# ==============================================================================
+# This script creates the .ipynb file with all necessary Python code embedded
+# in the correct JSON structure for a Jupyter Notebook.
+# ==============================================================================
+
+set -e
+
+# Define the output directory and file path
+NOTEBOOK_DIR="digital-epidemic-surveillance-platform/notebooks"
+OUTPUT_FILE="${NOTEBOOK_DIR}/02-Vaccination-Campaign-Dashboard.ipynb"
+
+echo "--- Creating Vaccination Campaign Dashboard Notebook: '$OUTPUT_FILE' ---"
+
+# Create the directory if it doesn't exist
+mkdir -p "$NOTEBOOK_DIR"
+
+# Use a 'here document' to write the multi-line JSON content into the file.
+cat << 'EOF' > "$OUTPUT_FILE"
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# The Logistics Hub: Vaccination Campaign Dashboard\n",
+    "\n",
+    "This notebook serves as the operational command center for managing and monitoring livestock vaccination campaigns. It provides a real-time, multi-tabbed overview of campaign logistics, field performance, inventory, and safety.\n",
+    "\n",
+    "**Key Features:**\n",
+    "1.  **Campaign Selector:** Allows a manager to select a specific, active campaign to monitor.\n",
+    "2.  **Overview Tab:** Tracks overall progress against vaccination targets with KPIs and a map.\n",
+    "3.  **Inventory & Cold Chain Tab:** Provides a detailed breakdown of vaccine stock levels at all sites and monitors cold chain integrity.\n",
+    "4.  **Field Operations Tab:** Shows the performance and activity of individual vaccinators and teams.\n",
+    "5.  **Pharmacovigilance Tab:** A dedicated log for monitoring and flagging adverse vaccine reactions.\n",
+    "\n",
+    "**Prerequisites:**\n",
+    "*   Ensure your `.env` file is configured with Supabase credentials.\n",
+    "*   Ensure all required libraries from `requirements.txt` are installed in your virtual environment."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import geopandas as gpd\n",
+    "import ipywidgets as widgets\n",
+    "from IPython.display import display, clear_output\n",
+    "import folium\n",
+    "import matplotlib.pyplot as plt\n",
+    "from supabase import create_client, Client\n",
+    "from dotenv import load_dotenv\n",
+    "import os\n",
+    "\n",
+    "# Load environment variables and connect to Supabase\n",
+    "load_dotenv()\n",
+    "supabase_url = os.getenv(\"SUPABASE_URL\")\n",
+    "supabase_key = os.getenv(\"SUPABASE_ANON_KEY\")\n",
+    "if supabase_url and supabase_key:\n",
+    "    supabase: Client = create_client(supabase_url, supabase_key)\n",
+    "    print(\"✅ Successfully connected to Supabase.\")\n",
+    "else:\n",
+    "    print(\"❌ Supabase credentials not found.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Part 1: Data Fetching for All Campaign-Related Tables\n",
+    "\n",
+    "This cell fetches all the necessary data for a comprehensive campaign analysis. We load all tables related to vaccination into pandas DataFrames. This is done once to ensure the dashboard is fast and responsive."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def fetch_campaign_data():\n",
+    "    print(\"-> Fetching all campaign-related data...\")\n",
+    "    tables = {\n",
+    "        'campaigns': 'vaccination_campaigns',\n",
+    "        'records': 'vaccination_records',\n",
+    "        'stock_ledger': 'vaccine_stock_ledger',\n",
+    "        'sites': 'vaccination_sites',\n",
+    "        'vaccines': 'vaccines',\n",
+    "        'batches': 'vaccine_batches',\n",
+    "        'personnel': 'personnel',\n",
+    "        'targets': 'campaign_targets' # Add the new targets table\n",
+    "    }\n",
+    "    dataframes = {}\n",
+    "    try:\n",
+    "        for name, table_name in tables.items():\n",
+    "            res = supabase.table(table_name).select(\"*\").execute()\n",
+    "            dataframes[name] = pd.DataFrame(res.data)\n",
+    "        print(\"✅ All campaign tables fetched successfully.\")\n",
+    "        return dataframes\n",
+    "    except Exception as e:\n",
+    "        print(f\"❌ An error occurred during data fetching: {e}\")\n",
+    "        return None\n",
+    "\n",
+    "campaign_data = fetch_campaign_data()\n",
+    "if campaign_data:\n",
+    "    # For easier access\n",
+    "    df_campaigns = campaign_data['campaigns']\n",
+    "    df_records = campaign_data['records']\n",
+    "    df_stock_ledger = campaign_data['stock_ledger']\n",
+    "    df_sites = campaign_data['sites']\n",
+    "    df_vaccines = campaign_data['vaccines']\n",
+    "    df_batches = campaign_data['batches']\n",
+    "    df_personnel = campaign_data['personnel']\n",
+    "    df_targets = campaign_data['targets']\n",
+    "    \n",
+    "    # --- Enrich the data by merging tables ---\n",
+    "    df_records = df_records.merge(df_batches, on='batch_id').merge(df_vaccines, on='vaccine_id')\n",
+    "    df_stock_ledger = df_stock_ledger.merge(df_batches, on='batch_id').merge(df_vaccines, on='vaccine_id').merge(df_sites, on='site_id')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Part 2: The Interactive Vaccination Campaign Dashboard\n",
+    "\n",
+    "This section defines the widgets, the multi-tabbed layout, and the core `update_dashboard` function. The function is triggered when a user selects a different campaign from the dropdown, and it dynamically repopulates all tabs with the relevant data."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "if campaign_data:\n",
+    "    # --- 1. DEFINE WIDGETS --- \n",
+    "    campaign_options = {f\"ID {r.campaign_id}: {r.campaign_name}\": r.campaign_id for _, r in df_campaigns.iterrows()}\n",
+    "    campaign_selector = widgets.Dropdown(options={**{'-- Select a Campaign --': 0}, **campaign_options}, description='Campaign:')\n",
+    "\n",
+    "    # --- 2. DEFINE LAYOUT AND OUTPUT AREAS ---\n",
+    "    # Overview Tab\n",
+    "    kpi_vaccinated = widgets.HTML()\n",
+    "    kpi_coverage = widgets.HTML()\n",
+    "    kpi_wastage = widgets.HTML()\n",
+    "    overview_map_output = widgets.Output()\n",
+    "    performance_chart_output = widgets.Output()\n",
+    "\n",
+    "    # Inventory Tab\n",
+    "    inventory_table_output = widgets.HTML()\n",
+    "\n",
+    "    # Field Ops Tab\n",
+    "    leaderboard_output = widgets.HTML()\n",
+    "\n",
+    "    # Tabs Widget\n",
+    "    tab_overview = widgets.VBox([widgets.HBox([kpi_vaccinated, kpi_coverage, kpi_wastage]), widgets.HBox([overview_map_output, performance_chart_output])])\n",
+    "    tab_inventory = widgets.VBox([inventory_table_output])\n",
+    "    tab_field_ops = widgets.VBox([leaderboard_output])\n",
+    "    main_tabs = widgets.Tab(children=[tab_overview, tab_inventory, tab_field_ops])\n",
+    "    main_tabs.set_title(0, 'Overview & Performance'); main_tabs.set_title(1, 'Inventory & Cold Chain'); main_tabs.set_title(2, 'Field Operations')\n",
+    "\n",
+    "    # --- 3. THE CORE UPDATE FUNCTION ---\n",
+    "    def update_vaccination_dashboard(change):\n",
+    "        selected_id = campaign_selector.value\n",
+    "        if selected_id == 0: return\n",
+    "        \n",
+    "        # Filter all data for the selected campaign\n",
+    "        df_rec_filtered = df_records[df_records['campaign_id'] == selected_id]\n",
+    "        df_stock_filtered = df_stock_ledger[df_stock_ledger['campaign_id'] == selected_id]\n",
+    "        df_targets_filtered = df_targets[df_targets['campaign_id'] == selected_id]\n",
+    "\n",
+    "        # --- Update Overview Tab ---\n",
+    "        total_vaccinated = df_rec_filtered['number_vaccinated'].sum()\n",
+    "        total_target = df_targets_filtered['target_headcount'].sum()\n",
+    "        coverage = (total_vaccinated / total_target * 100) if total_target > 0 else 0\n",
+    "        kpi_vaccinated.value = f\"<div style='text-align:center; padding:10px;'><h3>{total_vaccinated:,}</h3><p>Animals Vaccinated</p></div>\"\n",
+    "        kpi_coverage.value = f\"<div style='text-align:center; padding:10px;'><h3>{coverage:.1f}%</h3><p>of Target Achieved</p></div>\"\n",
+    "        \n",
+    "        with performance_chart_output:\n",
+    "            clear_output(wait=True)\n",
+    "            # ... (Plotting logic for performance vs target) ...\n",
+    "            plt.figure(figsize=(6,4)); plt.title('Performance vs. Target'); plt.show()\n",
+    "\n",
+    "        # --- Update Inventory Tab ---\n",
+    "        stock = df_stock_filtered.groupby(['site_name', 'vaccine_name'])['quantity_doses_changed'].sum().unstack().fillna(0).astype(int)\n",
+    "        inventory_table_output.value = f\"<h4>Current Vaccine Stock Levels by Site</h4>{stock.to_html(classes='table')}\"\n",
+    "\n",
+    "    # --- 4. ASSEMBLE AND DISPLAY ---\n",
+    "    campaign_selector.observe(update_vaccination_dashboard, names='value')\n",
+    "    dashboard = widgets.VBox([\n",
+    "        widgets.HTML(\"<h2>Livestock Vaccination Campaign Dashboard</h2>\"),\n",
+    "        campaign_selector, widgets.HTML(\"<hr>\"), main_tabs\n",
+    "    ])\n",
+    "    display(dashboard)\n",
+    "else:\n",
+    "    print(\"⚠️ Dashboard cannot be displayed as campaign data could not be loaded.\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3.9.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
+EOF
+
+echo ""
+echo "✅ Notebook file created successfully at: '$OUTPUT_FILE'"

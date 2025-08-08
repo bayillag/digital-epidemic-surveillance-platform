@@ -1,0 +1,52 @@
+# ==============================================================================
+# Git Ignore file for the Digital Epidemic Surveillance Platform
+# ==============================================================================
+# This file tells Git which files and folders to intentionally ignore.
+# It's crucial for keeping the repository clean and secure.
+
+# --- Environment Variables ---
+# Never commit credentials or secrets!
+.env
+.env*
+!.env.example
+
+# --- Python ---
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Compiled Python files and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# --- Jupyter Notebook ---
+# Checkpoints are auto-saved backups and clutter the repository.
+.ipynb_checkpoints/
+
+# --- Generated Reports ---
+# These are build artifacts, not source code, and should not be versioned.
+*.html
+*.pdf
+*.docx
+
+# --- Temporary Files ---
+# Images and logs created by the reporting engine.
+*.png
+*.log
+
+# --- IDE / Editor Configuration ---
+# User-specific settings that don't belong in a shared repository.
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- OS-specific files ---
+.DS_Store
+Thumbs.db
