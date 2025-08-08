@@ -13,5 +13,6 @@ Furthermore, the platform's architecture is inherently collaborative. By standar
 This book is more than a technical manual for animal health; it is a foundational text for the future of One Health in practice. It provides the tools and the vision needed to build surveillance systems that are as holistic and interconnected as the ecosystems we strive to protect. It is essential reading for anyone working at the critical interface of animal, human, and environmental health.
 
 **Dr  Gurbachew Kunupe**
+
 *Head of Veterinary Epidemiology Unit*
 *Jinka Regional Veterinary Laboratory Centre, Jinka Ethiopia*
